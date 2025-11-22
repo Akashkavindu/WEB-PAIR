@@ -7,6 +7,22 @@ let code = require('./pair');
 require('events').EventEmitter.defaultMaxListeners = 500;
 app.use('/code', code);
 
+
+const fs = require("fs");
+
+if (!fs.existsSync("./.env")) {
+    fs.writeFileSync("./.env",
+`MEGA_EMAIL=
+MEGA_PASSWORD=
+SESSION_ID=
+OWNER_NUMBER=
+`);
+    console.log("⚠️ .env file missing. I created a new one for you.");
+    console.log("➡️ Please fill your details in .env and run again.");
+    process.exit();
+}
+
+
 app.use('/',async (req, res, next) => {
 res.sendFile(__path + '/pair.html')
 })
