@@ -1,56 +1,63 @@
 const express = require("express");
 const router = express.Router();
-const {
-    default: makeWASocket,
-    fetchLatestBaileysVersion,
-    useMultiFileAuthState
-} = require('@adiwajshing/baileys');
-const fs = require('fs');
-require('dotenv').config();
+const { 
+    default: makeWASocket, 
+    fetchLatestBaileysVersion, 
+    useMultiFileAuthState 
+} = require("@adiwajshing/baileys");
+const fs = require("fs");
+require("dotenv").config();
 
 async function startPair() {
     const { version } = await fetchLatestBaileysVersion();
-    const { state, saveCreds } = await useMultiFileAuthState('./session');
+
+    // Session folder auto-create
+    if (!fs.existsSync("./session")) fs.mkdirSync("./session");
+    const { state, saveCreds } = await useMultiFileAuthState("./session");
 
     const sock = makeWASocket({
         version,
+        auth: state,
         printQRInTerminal: true,
-        auth: state
+        browser: ["Replit", "Desktop", "1.0.0"]
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on('connection.update', async update => {
+    sock.ev.on("connection.update", async (update) => {
         const { connection } = update;
 
-        if (connection === 'open') {
+        if (connection === "open") {
             console.log("✅ WhatsApp connected!");
 
-            // --- Read session files
+            // Read all session files
+            const sessionFiles = fs.readdirSync("./session");
             let sessionData = {};
-            const files = fs.readdirSync('./session');
-
-            files.forEach(f => {
-                sessionData[f] = fs.readFileSync(`./session/${f}`, 'utf8');
+            sessionFiles.forEach((file) => {
+                const content = fs.readFileSync(`./session/${file}`, "utf8");
+                sessionData[file] = content;
             });
 
-            // --- Convert to Base64 session ID
-            const sessionID = Buffer.from(JSON.stringify(sessionData)).toString('base64');
+            // Convert to Base64 session ID
+            const sessionID = Buffer.from(JSON.stringify(sessionData)).toString("base64");
 
-            // --- Save session ID to .env
+            // Save session ID to .env
             let envData = fs.readFileSync(".env", "utf8");
-            envData = envData.replace(/SESSION_ID=.*/g, `SESSION_ID=${sessionID}`);
+            if (/SESSION_ID=.*/.test(envData)) {
+                envData = envData.replace(/SESSION_ID=.*/, `SESSION_ID=${sessionID}`);
+            } else {
+                envData += `\nSESSION_ID=${sessionID}`;
+            }
             fs.writeFileSync(".env", envData);
-
             console.log("📌 SESSION_ID updated inside .env");
 
-            // --- Send session to OWNER_NUMBER
+            // Send session ID to OWNER_NUMBER
             const owner = process.env.OWNER_NUMBER;
             if (owner) {
                 await sock.sendMessage(`${owner}@s.whatsapp.net`, {
-                    text: `🔐 *Your Session ID:*\n\n${sessionID}`
+                    text: `🔐 Your session ID:\n${sessionID}`
                 });
-                console.log("📨 Session ID sent to owner WhatsApp");
+                console.log("📨 Session ID sent to OWNER_NUMBER WhatsApp!");
             } else {
                 console.log("⚠️ OWNER_NUMBER missing in .env");
             }
@@ -58,10 +65,10 @@ async function startPair() {
     });
 }
 
-// ROUTE
-router.get('/', (req, res) => {
+// Express route
+router.get("/", (req, res) => {
     res.send("PAIR system working… scan QR in console.");
-    startPair();
+    startPair(); // start pairing on route access
 });
 
 module.exports = router;
