@@ -31,8 +31,9 @@ async function startPair() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false, // disable QR
-        browser: ["Replit", "Desktop", "1.0.0"]
+        printQRInTerminal: false,
+                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
+                browser: Browsers.macOS("Safari"),
     });
 
     sock.ev.on("creds.update", saveCreds);
