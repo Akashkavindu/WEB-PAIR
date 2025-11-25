@@ -12,13 +12,14 @@ const {
     Browsers,
     jidNormalizedUser
 } = require("@whiskeysockets/baileys");
-const { upload } = require('./mega');
+
+// MEGA import එක ඉවත් කර ඇත, එය තවදුරටත් අවශ්‍ය නොවේ.
+// const { upload } = require('./mega'); 
 
 // Replit Secret වෙතින් OWNER_NUMBER එක ලබා ගනියි.
-// මෙය අනිවාර්යයෙන්ම Replit Secrets වල තිබිය යුතුයි.
 const OWNER_NUMBER = process.env.OWNER_NUMBER || '';
 
-// OWNER_NUMBER එක ජාත්‍යන්තර ආකෘතියේ JID බවට පත් කරයි (උදා: 9477xxxxxxx@s.whatsapp.net)
+// OWNER_NUMBER එක ජාත්‍යන්තර ආකෘතියේ JID බවට පත් කරයි
 const ownerJid = OWNER_NUMBER ? jidNormalizedUser(OWNER_NUMBER + '@s.whatsapp.net') : null;
 
 function removeFile(FilePath) {
@@ -26,7 +27,7 @@ function removeFile(FilePath) {
     fs.rmSync(FilePath, { recursive: true, force: true });
 }
 
-// ෂෝන් කෙරූ කේතයේ තිබූ randomMegaId function එක මෙහිදී නැවතත් භාවිතා කරයි
+// randomMegaId function එක Base64 Send කිරීම සඳහා අවශ්‍ය නොවේ, නමුත් කේතයෙන් ඉවත් කළේ නැත.
 function randomMegaId(length = 6, numberLength = 4) {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
@@ -43,6 +44,7 @@ router.get('/', async (req, res) => {
 
     async function DanuwaPair() {
         const auth_path = './session/';
+        // Session file සාර්ථකව සාදා ගත් පසු එය 'session' folder එකට save වේ.
         const { state, saveCreds } = await useMultiFileAuthState(auth_path); 
 
         try {
@@ -73,33 +75,36 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = s;
 
                 if (connection === "open") {
-                    console.log("✅ Device Successfully Paired! Starting MEGA Upload...");
+                    console.log("✅ Device Successfully Paired! Starting Base64 Encoding and Send..."); 
                     try {
                         await delay(5000); // Wait for credentials to save fully
-
-                        // Session ගොනුව MEGA වෙත යැවීම
-                        const fileName = `${randomMegaId()}.json`;
-                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), fileName);
-
-                        const string_session = mega_url.replace('https://mega.nz/file/', '');
-                        const sid = string_session;
-
-                        console.log(`✅ Session ID generated and uploaded to MEGA: ${sid}`);
+                        
+                        // 1. creds.json file එකේ content එක කියවීම
+                        const credsJson = fs.readFileSync(auth_path + 'creds.json'); 
+                        
+                        // 2. එම content එක Base64 String එකක් බවට පත් කිරීම (මෙය ඔබ deploy bot එකට අවශ්‍ය දිගු String එකයි)
+                        const finalBase64String = Buffer.from(credsJson).toString('base64');
+                        
+                        console.log(`✅ Session ID generated and Encoded. Sending to Owner...`);
 
                         // Session ID එක OWNER_NUMBER එකට යැවීම
                         if (ownerJid) {
                             await DanuwaPairWeb.sendMessage(ownerJid, {
-                                text: `⭐ Session ID එක සාර්ථකව Generate වී MEGA වෙත Upload විය. String Session එක:\n\n*Zanta-MD Session id👇*\n\n_${sid}_\n\nMEGA Link: ${mega_url}`
+                                text: `⭐ Session ID එක සාර්ථකව Generate විය. *මෙය ඔබගේ Deploy Bot එකේ SESSION_ID ලෙස යොදන්න.*:\n\n*Zanta-MD Base64 Session id👇*\n\n${finalBase64String}` 
                             });
                             console.log(`✅ Confirmation message sent to Owner Number: ${OWNER_NUMBER}`);
                         } else {
-                            console.log("⚠️ OWNER_NUMBER configured නැති නිසා Session ID එක WhatsApp හරහා යැවිය නොහැක. Console එකෙන් ලබා ගන්න.");
+                            console.log("⚠️ OWNER_NUMBER configured නැති නිසා Session ID එක WhatsApp හරහා යැවිය නොහැක. Console එකෙන් Base64 String එක ලබා ගන්න.");
                         }
+                        
+                        // වැඩ අවසන් වූ පසු Bot එක Close කර Session Files ඉවත් කරයි
+                        await delay(5000);
+                        await DanuwaPairWeb.end('Session sent successfully');
+                        removeFile(auth_path); 
 
                     } catch (e) {
-                        console.error("❌ MEGA upload or Message send failed:", e);
-                        // ඔබට මෙහිදි 'pm2 restart' එකක් අවශ්‍ය නම් තබා ගන්න.
-                        // exec('pm2 restart danuwa'); 
+                        console.error("❌ Base64 Encoding or Message send failed:", e);
+                        // exec('pm2 restart danuwa'); // අවශ්‍ය නම් pm2 restart
                     } 
                 } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
                     // 401 (Logged Out) නොවන error එකකදී නැවත සම්බන්ධ වීමට උත්සාහ කරයි
