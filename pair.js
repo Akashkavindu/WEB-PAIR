@@ -16,20 +16,7 @@ const {
 const { upload } = require('./mega');
 
 
-// 🔥 OWNER NUMBER — site එකෙන් user enter කරන එකෙන් ගන්නවා
-// Example: /?number=9477xxxxxxx&owner=9471xxxxxxx
-function getOwnerJID(req) {
-    const owner = req.query.owner;  // user enter කරන owner number
-    if (!owner) return null;
-
-    const cleaned = owner.replace(/[^0-9]/g, ''); 
-    if (!cleaned) return null;
-
-    return jidNormalizedUser(cleaned + '@s.whatsapp.net');
-}
-
-
-// Delete folder
+// 🧹 Delete folder
 function removeFile(path) {
     if (fs.existsSync(path)) {
         fs.rmSync(path, { recursive: true, force: true });
@@ -37,7 +24,7 @@ function removeFile(path) {
 }
 
 
-// Random ID for MEGA file
+// 🔑 Random ID for Mega File
 function randomMegaId(length = 6, numberLength = 4) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let txt = '';
@@ -48,22 +35,25 @@ function randomMegaId(length = 6, numberLength = 4) {
 
 
 
-// ===================== ROUTE HANDLER =====================
+// ===================== MAIN ROUTE =====================
 
 router.get('/', async (req, res) => {
 
-    let num = req.query.number;       // pairing number
-    let ownerJid = getOwnerJID(req);  // owner to send session
+    // USER ENTER කරන number එක
+    let num = req.query.number;
 
-    if (!num) return res.send({ error: "Missing ?number=" });
-    if (!ownerJid) console.log("⚠️ Owner Number Missing: no WhatsApp sendback.");
+    if (!num) {
+        return res.send({ error: "❗ Missing number. Use: ?number=947xxxxxxxx" });
+    }
 
-    async function DanuwaPair() {
+
+    async function StartPairing() {
 
         const auth_path = './session/';
         const { state, saveCreds } = await useMultiFileAuthState(auth_path);
 
         try {
+
             let sock = makeWASocket({
                 auth: {
                     creds: state.creds,
@@ -75,10 +65,11 @@ router.get('/', async (req, res) => {
             });
 
 
-            // ================== PAIR CODE ======================
+            // ------------------ PAIR CODE -------------------
             if (!sock.authState.creds.registered) {
 
                 await delay(1500);
+
                 num = num.replace(/[^0-9]/g, '');
 
                 const code = await sock.requestPairingCode(num);
@@ -89,20 +80,24 @@ router.get('/', async (req, res) => {
             }
 
 
-            // save credentials
+            // Save creds
             sock.ev.on("creds.update", saveCreds);
 
 
-            // ================== CONNECTION HANDLER ======================
+            // ------------------ CONNECTION HANDLER -------------------
             sock.ev.on("connection.update", async (update) => {
 
                 const { connection, lastDisconnect } = update;
 
                 if (connection === "open") {
-                    console.log("✅ Device Paired! Uploading session to MEGA...");
+
+                    console.log("\n====================================");
+                    console.log("  ✅ Device Paired Successfully!");
+                    console.log("====================================\n");
 
                     try {
-                        await delay(5000); // allow writing creds file
+
+                        await delay(4000); // ensure file writing
 
                         const fileName = `${randomMegaId()}.json`;
                         const filePath = auth_path + "creds.json";
@@ -111,43 +106,27 @@ router.get('/', async (req, res) => {
 
                         const sid = megaUrl.replace("https://mega.nz/file/", "");
 
-                        console.log("🔥 MEGA Session Uploaded:", sid);
-
-
-                        // SEND TO OWNER
-                        if (ownerJid) {
-                            await sock.sendMessage(ownerJid, {
-                                text:
-`⭐ *Zanta-MD Session ID Successfully Generated!*
-
-Session ID:
-_${sid}_
-
-MEGA Link:
-${megaUrl}`
-                            });
-
-                            console.log("📨 Sent session to owner:", ownerJid);
-                        } else {
-                            console.log("⚠️ No Owner: Session can't be sent by WhatsApp.");
-                        }
+                        console.log("🔥 SESSION ID:", sid);
+                        console.log("📁 MEGA LINK:", megaUrl);
+                        console.log("====================================\n");
 
                     } catch (err) {
-                        console.error("❌ MEGA Upload / Send Error:", err);
+                        console.error("❌ MEGA Upload Error:", err);
                     }
                 }
 
 
-                // retry connection
+                // retry logic
                 if (connection === "close") {
+
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
 
                     if (statusCode !== 401) {
-                        console.log("♻️ Reconnecting in 10s...");
+                        console.log("♻️ Reconnecting in 10 seconds...");
                         await delay(10000);
-                        return DanuwaPair();
+                        return StartPairing();
                     } else {
-                        console.log("❌ Logged out. Removing session.");
+                        console.log("❌ Logged Out - Clearing Old Session");
                         removeFile(auth_path);
                     }
                 }
@@ -165,14 +144,13 @@ ${megaUrl}`
         }
     }
 
-    return await DanuwaPair();
+    return await StartPairing();
 });
 
 
-// Global errors
+
 process.on("uncaughtException", (err) => {
     console.log("Unhandled Error:", err);
 });
-
 
 module.exports = router;
