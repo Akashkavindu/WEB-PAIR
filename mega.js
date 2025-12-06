@@ -3,8 +3,8 @@ const mega = require("megajs");
 
 // Replit Secrets වලින් MEGA විස්තර ලබා ගනියි (process.env)
 const auth = {
-    email: process.env.MEGA_EMAIL || '', // Replit Secret: MEGA_EMAIL
-    password: process.env.MEGA_PASSWORD || '', // Replit Secret: MEGA_PASSWORD
+    email: "Nimsaraakash194@gmail.com",
+    password: "Akashkavindu12345",
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246'
 }
 
